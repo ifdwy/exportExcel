@@ -128,7 +128,17 @@
 		var csv = XLSX.utils.sheet_to_csv(worksheet);
 		var rows = csv.split('\n');
 		rows.pop();
-		oldCsv = [...rows];
+		// oldCsv =[...rows];
+		let newEditCsv = [...rows];
+		let edit =[]
+		//	给以后调用的表格里的数据增加主键
+		newEditCsv.filter(function(item, index){
+				let newItem =item.split(',');
+				newItem.unshift("id"+index);
+				edit.push(newItem.toString());
+		})
+		oldCsv =[...edit];
+		console.log("初始值==============>", oldCsv)
 		document.getElementById('result').innerHTML = csv2table(rows);
 	}
 
@@ -144,7 +154,7 @@
 		});
 	}
 
-	// 空值查询Div只执行一次
+	// 控制查询Div只执行一次
 	let queryFlag =true;
 	// 将csv转换成表格
 	var thName;//	拿到表头
@@ -156,7 +166,7 @@
 		if (queryFlag) {
 			//	渲染查询条件, 遍历表头
 			let queryTag ='';
-			for (let i = 0; i <3; i++) {
+			for (let i = 0; i <thName.length; i++) {
 				queryTag +=''+thName[i]+' :<input type="text"/><br/>'
 			}
 			$(".queryContent").append(queryTag).append('<button type="button" onclick="queryBtn()">查询</button><button type="button" onclick="queryRestBtn()">重置</button>');
@@ -168,7 +178,6 @@
 		rows.forEach(function(row, idx) {
 			var columns = row.split(',');
 			columns.unshift(idx+1); // 添加行索引
-			
 			if(idx == 0) { // 添加列索引
 				html += '<tr>';
 				for(var i=0; i<columns.length; i++) {
@@ -181,8 +190,10 @@
 				columns.forEach(function(column, index) {
 					html += '<td  onselectstart="return false" οnselect="document.selection.empty()">'+column+'</td>';
 				});
-				html += '<td><button onclick="editRow(this)" type="button">编辑</button><button onclick="deleteRow(this)" type="button">删除</button></td></tr>';
+				html += '<td><button id="'+oldCsv[idx].split(',')[0]+'" onclick="editRow(this)" type="button">编辑</button><button id="'+oldCsv[idx].split(',')[0]+'"  onclick="deleteRow(this)" type="button">删除</button></td></tr>';
 			}
+
+			
 			
 		});
 		html += '</table>';
@@ -197,49 +208,44 @@
 			query.push($(this).val())
 		})
 		console.log("query============>", query)
-		// let count =0;
-		// for (let q = 0; q < query.length; q++) {
-		// 	if (query[q] !="") {
-		// 		count++;
-		// 	}
-		// }
-		// console.log("count==============>", count)
 
 		let queryCsv = [...oldCsv];
-		// console.log("queryCsv query============>", queryCsv)
 		let newCsv=[];
 		newCsv.push(oldCsv[0]);
 		queryCsv.filter(function(item,index){
-			let data =item.split(',');
-			for (let j = 0; j < query.length; j++) {
-				for ( let i = 0; i < data.length; i++) {
-					if (data[i] == query[j]) {
-						newCsv.push(item.toString());
+			const [id, ...queryItem] =item.split(",");
+			let data;
+			for (let n = 0; n < query.length; n++) {
+				if (query[n] !="") {
+					if (queryItem.includes(query[n])) {
+						data = item;
+					}else{
+						console.log("不曾包含")
+						data =null;
+						break;
 					}
+				}else{
+					continue;
 				}
+				
+			}
+			if (data !=null) {
+				newCsv.push(data);
 			}
 		})
+		console.log("newCsv============>", newCsv)
+	  	renderTab(newCsv);
+	}
 
-		// console.log("newCsv query============>", newCsv)
-		//	如果有重复的则保留一个重复的
-		let hash=[];
-		let mixCsv =[];
-	  	for (let i = 0; i < newCsv.length; i++) {
-	    	if(hash.indexOf(newCsv[i])==-1){
-	      		hash.push(newCsv[i]);
-	     	}else{
-	     		mixCsv.push(oldCsv[0]);
-	     		mixCsv.push(newCsv[i]);
-
-	     	}
-	  	}
-
-	  	let finallyCsv=	mixCsv.length ==0?hash:mixCsv;	
-	  	console.log("finallyCsv===========>", finallyCsv)
-
-		//	渲染表格
-		document.getElementById('result').innerHTML = csv2table(finallyCsv);
-
+	//	重新渲染表格
+	function renderTab(str){
+		//	删除每个数组中的第一个
+		let m =[];
+		for (let i = 0; i < str.length; i++) {
+			let data =str[i].substr(str[i].indexOf(',')+1, str[i].length);
+			m.push(data);
+		}
+		document.getElementById('result').innerHTML = csv2table(m);
 	}
 
 	//	重置
@@ -247,17 +253,18 @@
 		$(".queryContent").find("input").each(function(){
 			$(this).val("");
 		})
-		//	渲染表格
-		document.getElementById('result').innerHTML = csv2table(oldCsv);
+		renderTab(oldCsv);
 	}
 
 	//	添加一行
-	function addRow(tabFlag, contentArr){
+	function addRow(tabFlag, contentArr, id){
 		$("#addTable tr").empty();
 		$(".addDiv").show();
 		tabFlag = tabFlag || 'add';
 		tabFlag == 'add' ? $(".addDiv").removeClass("edit") : $(".addDiv").removeClass("add");
 		$(".addDiv").addClass(""+tabFlag+"");
+		id ==undefined?$(".addDiv").attr("data-field",""):$(".addDiv").attr("data-field",""+id+"");
+		
 		let thTag='<tr>';
 		let tdTag='<tr>';
 		for (var i = 0; i < thName.length; i++) {
@@ -281,26 +288,57 @@
 			inputVal.push($(this).val())
 		})
 		$(".addDiv").hide();
-		//	刷新表格
-		oldCsv.push(inputVal.toString())
+		//	编辑的确定操作
 		if ($(_this).parents("div .addDiv").hasClass("edit")) {
-			//	查找原始位置下标
-			let copyIndex =[];
-			oldCsv.filter(function(item, index){
-				if (item.split(',')[0] == inputVal.toString().split(',')[0]) {
-					copyIndex.push(index);
-				}
-			})
-			//	将值替换到原始位置
-			oldCsv.copyWithin(copyIndex[0], copyIndex[1], copyIndex[1]+1 ==oldCsv.length?oldCsv.length:copyIndex[1]+1);
-			//	删除掉新增的已有数据
-			oldCsv.pop();
+
+			let thisId = $(_this).parents("div .addDiv").attr("data-field");
+			inputVal =[thisId, ...inputVal];
+			//	校验是否是重复数据
+			regRepeat(oldCsv, inputVal, 'edit', thisId);
+
+		}else{//	添加的确定操作
+			//	刷新表格
+			let newId =oldCsv.length+1;
+			inputVal.unshift("id"+newId)
+			//	校验是否是重复数据
+			regRepeat(oldCsv, inputVal);
 		}
-		//	渲染表格
-		document.getElementById('result').innerHTML = csv2table(oldCsv);
-		
+		renderTab(oldCsv);
 	}
-	
+
+	//	校验是否是重复数据
+	function regRepeat(old, val, flag, thisId){
+		let count =0;
+		for (let a = 0; a < old.length; a++) {
+			let subData =old[a].substr(old[a].indexOf(',')+1, old[a].length);
+			const [inputId, ...inputItem] =val;
+			if (inputItem.toString() != subData) {
+				count++;
+			}
+		}
+		if (count == old.length) {
+			if (flag =='edit') {//编辑的校验
+				//	找到原始数据然后替换掉
+				let dataArr=[];
+				old.filter(function(item, index){
+					if (item.split(',')[0] == thisId) {
+						dataArr.push(val.toString())
+					}else{
+						dataArr.push(item.toString())
+					}
+				});
+				oldCsv = [...dataArr];
+				return oldCsv;
+			}else{
+				old.push(val.toString());
+			}
+		}else{
+			alert("请勿重复添加数据!");
+			$(".addDiv").show();
+
+		}
+	}
+
 
 	//	添加一行-取消按钮
 	function addCance(_this){
@@ -309,13 +347,14 @@
 
 	//	编辑一行
 	function editRow(_this){
+		let id =$(_this).attr("id");
 		let contentArr =[];
 		$(_this).parents('tr').children("td:not(:last-child)").each(function(){
 			contentArr.push($(this)[0].innerText);
 		})
 		//	删除数组中的第一个
 		contentArr.shift();
-		addRow('edit', contentArr);
+		addRow('edit', contentArr, id);
 
 	}
 
@@ -329,13 +368,14 @@
 		contentArr.shift();
 		//	从原始表格数据里删掉该条数据
 		oldCsv.filter(function(item, index){
-			if (contentArr.toString() == item) {
+			const newContent =[$(_this).attr("id"), ...contentArr];
+			if (newContent.toString() == item) {
 				oldCsv.splice(index,1)
 			}
 		})
 		$(_this).parents('tr').remove();
-		//	重新渲染表格
-		document.getElementById('result').innerHTML = csv2table(oldCsv);
+
+		renderTab(oldCsv);
 	}
 
 	// 导出事件
